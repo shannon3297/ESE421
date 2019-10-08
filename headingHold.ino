@@ -24,7 +24,7 @@ Adafruit_LSM9DS1 lsm = Adafruit_LSM9DS1(LSM9DS1_XGCS, LSM9DS1_MCS);
 #define LpingEchoPin 25 // ping sensor echo pin (input to Arduino)
 #define LpingGrndPin 27 // ping sensor ground pin (use digital pin as ground)
 
-// ping sensor on the right UPDATE
+// ping sensor on the right
 #define RpingTrigPin 6 // ping sensor trigger pin (output from Arduino)
 #define RpingEchoPin 5 // ping sensor echo pin (input to Arduino)
 
@@ -67,21 +67,11 @@ void setup() {
     spinMotors();
 
     // IMU
-    
     lsm.begin();
     lsm.setupAccel(lsm.LSM9DS1_ACCELRANGE_2G);
     lsm.setupMag(lsm.LSM9DS1_MAGGAIN_4GAUSS);
     lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_245DPS);
-    lsm.read();
-    sensors_event_t a, m, g, temp;
-    lsm.getEvent(&a, &m, &g, &temp);
-  
-    // find gyro bias
-    double sum = 0.0;
-    for (int i = 0; i < 10; i++) {
-      sum += g.gyro.z;
-    }
-    rb = sum / 10.0;
+    rb = findRB();
 }
 
 void loop() {
@@ -91,8 +81,10 @@ void loop() {
         static double servoCenter_us = 1350.0;  // default value can be changed in SETUP
         servoCenter_us = 800.0 + analogRead(SERVOPOT); 
         wheelTurnBias = constrain(servoCenter_us, servoCenter_us-SERVOMAXUS, servoCenter_us+SERVOMAXUS);
-        setServoAngle(wheelTurnBias);
         steeringServo.writeMicroseconds(wheelTurnBias);
+        currAngle = 0.0;
+        Serial.println(rb);
+        Serial.println(wheelTurnBias);
         return;
     }
     
@@ -101,14 +93,14 @@ void loop() {
   lsm.read();
   sensors_event_t a, m, g, temp;
   lsm.getEvent(&a, &m, &g, &temp);
-     
+  
   dt = micros() - microlast;
   currAngle += -(g.gyro.z - rb) * dt * 0.000001; // get time in seconds
   microlast = micros();
-  servoAngleDeg = constrain(KP * (currAngle - desiredAngle), -20, 20);
+  servoAngleDeg = constrain(KP * (currAngle - desiredAngle), -25, 25);
   setServoAngle(servoAngleDeg);
-  Serial.print("\tCurrAngle: \t"); Serial.println(currAngle);
-  Serial.print("\tservoAngleDeg: \t");Serial.println(servoAngleDeg);
+//  Serial.print("\tCurrAngle: \t"); Serial.println(currAngle);
+//  Serial.print("\tservoAngleDeg: \t");Serial.println(servoAngleDeg);
 }
 
 void spinMotors() {
@@ -120,8 +112,8 @@ void spinMotors() {
 
 void setServoAngle(double sDeg) {
     double ServoCenter_us = wheelTurnBias;
-    double ServoScale_us = 8.0;    // micro-seconds per degree
-    double t_us = constrain(ServoCenter_us + ServoScale_us * sDeg, ServoCenter_us-150, ServoCenter_us+150);
+    double ServoScale_us = 10.0;    // micro-seconds per degree
+    double t_us = constrain(ServoCenter_us + ServoScale_us * sDeg, ServoCenter_us-SERVOMAXUS, ServoCenter_us+SERVOMAXUS);
     steeringServo.writeMicroseconds(t_us);
 }
 
@@ -185,4 +177,17 @@ double getPingDistanceCM(int ping) {
        pingDistanceCM = constrain(0.017*echo_time,5.0,50.0);
    }
   return pingDistanceCM;
+}
+
+double findRB() {
+    lsm.read();
+    sensors_event_t a, m, g, temp;
+    lsm.getEvent(&a, &m, &g, &temp);
+  
+    // find gyro bias
+    double sum = 0.0;
+    for (int i = 0; i < 10; i++) {
+      sum += g.gyro.z;
+    }
+    rb = sum / 10.0;  
 }
