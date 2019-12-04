@@ -39,6 +39,7 @@ Servo steeringServo;
 #define SERVOPOT A7
 #define SERVOSCALEUS 10
 #define SERVOMAXUS 400
+#define SERVOMAXDEG 20
 double servoAngleDeg;
 
 // defining global variables and constants
@@ -51,6 +52,14 @@ double currAngle = 0.0;
 double rb;
 double desiredAngle = 0.0;
 double wheelTurnBias;
+double velocity;
+boolean reached = false;
+
+#define desiredX 5
+#define desiredY 5
+double currX = 0;
+double currY = 0;
+#define THRESHOLD 1
 
 void setup() {
     Serial.begin(115200);
@@ -72,34 +81,56 @@ void setup() {
     lsm.setupMag(lsm.LSM9DS1_MAGGAIN_4GAUSS);
     lsm.setupGyro(lsm.LSM9DS1_GYROSCALE_245DPS);
     rb = findRB();
+
+    velocity = velWithPWM100 * motorLPWM / 100;
+    double desiredRad = tan((desiredY - currY) / (desiredX - currX));
+    desiredAngle = constrain(desiredRad * 4068 / 71, -SERVOMAXDEG, SERVOMAXDEG);
+    
 }
 
 void loop() {
-  // center wheels
-  double frontDist = getPingDistanceCM(1);
-  if (frontDist < 10.0) {
-        static double servoCenter_us = 1350.0;  // default value can be changed in SETUP
-        servoCenter_us = 800.0 + analogRead(SERVOPOT); 
-        wheelTurnBias = constrain(servoCenter_us, servoCenter_us-SERVOMAXUS, servoCenter_us+SERVOMAXUS);
-        steeringServo.writeMicroseconds(wheelTurnBias);
-        currAngle = 0.0;
-//        Serial.println(rb);
-//        Serial.println(wheelTurnBias);
-        return;
-    }
+  while (!reached) {
+    // center wheels
+    double frontDist = getPingDistanceCM(1);
+    if (frontDist < 10.0) {
+          static double servoCenter_us = 1350.0;  // default value can be changed in SETUP
+          servoCenter_us = 800.0 + analogRead(SERVOPOT); 
+          wheelTurnBias = constrain(servoCenter_us, servoCenter_us-SERVOMAXUS, servoCenter_us+SERVOMAXUS);
+          steeringServo.writeMicroseconds(wheelTurnBias);
+          currAngle = 0.0;
+          currX = 0;
+          currY = 0;
+          reached = false;
+          motorLPWM = 100;
+          motorRPWM = 100;
+      }
+      
+      // testServo();
+      // IMU setup
+      lsm.read();
+      sensors_event_t a, m, g, temp;
+      lsm.getEvent(&a, &m, &g, &temp);
+      
+      dt = (micros() - microlast) * 0.001;
+      currX += dt * velocity * cos(currAngle * 4068 / 71);
+      Serial.println(currAngle);
+      if (currX > desiredX - THRESHOLD && currX < desiredX + THRESHOLD) {
+        Serial.println("hooray!");
+        motorLPWM = 0;
+        motorRPWM = 0;
+        spinMotors();
+        reached = true;
+      } else {
+        spinMotors();
+        currAngle += -(g.gyro.z - rb) * dt * 0.000001; // get time in seconds
+        microlast = micros();
+        servoAngleDeg = constrain(KP * (currAngle - desiredAngle), -25, 25);
+        setServoAngle(servoAngleDeg);
+        
+      }
+  }
     
-    // testServo();
-  // IMU setup
-  lsm.read();
-  sensors_event_t a, m, g, temp;
-  lsm.getEvent(&a, &m, &g, &temp);
-  
-  dt = micros() - microlast;
-  currAngle += -(g.gyro.z - rb) * dt * 0.000001; // get time in seconds
-  microlast = micros();
-  servoAngleDeg = constrain(KP * (currAngle - desiredAngle), -25, 25);
-  setServoAngle(servoAngleDeg);
-  Serial.print("\tCurrAngle: \t"); Serial.println(currAngle);
+//  Serial.print("\tCurrAngle: \t"); Serial.println(currAngle);
 //  Serial.print("\tservoAngleDeg: \t");Serial.println(servoAngleDeg);
 }
 
