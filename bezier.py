@@ -33,11 +33,10 @@ all_files = ['X1small_Y0bigL_east.jpg', 'X2small_Y0bigL_east.jpg', 'X2small_Y0bi
     'X5big_Y2smallL_south.jpg', 'X5big_Y2smallR_south.jpg', 'X5big_Y4smallR_south.jpg', 'X5big_Y5smallR_south.jpg', 'X5big_Y6smallL_south.jpg',
     'X5small_Y1bigR_west.jpg', 'X7small_Y1bigR_west.jpg']
 
-# function locates cone coordinates, computes bezier curve, and displays associated image processing steps
-# @inputs
-# filename: name of file containing cone
-# @returns computed x, y cone coordinates
-def bezier(filename):
+# iterate over all images specified
+while file_counter != num_total_files:
+    # read in image
+    filename = all_files[file_counter]
     # parse filename to find size of cone
     size = filename.split('_')
     # determine minimum threshold of contour shape to be used later based on size of cone
@@ -117,11 +116,5 @@ def bezier(filename):
         cv2.imshow("bezier", img)
         cv2.waitKey(0)
 
-        return base
-
-# iterate over all images specified
-while file_counter != num_total_files:
-    # locate cone coordinates and compute bezier curve
-    bezier(all_files[file_counter])
     # increment file count 
     file_counter = file_counter + 1
